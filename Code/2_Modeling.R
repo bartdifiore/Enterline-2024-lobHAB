@@ -290,6 +290,8 @@ tidy(fit6, effects = "ran_pars")
 
 write_rds(fit6,"Data/Derived/Model_output/fit6.rds", compress = "gz")
 
+fit6 <- readRDS("Data/Derived/Model_output/fit6.rds")
+
 
 nd <- expand.grid(
   hab_sed = unique(mod_data2$hab_sed),
@@ -315,9 +317,11 @@ p %>%
   ggplot(aes(depth, exp(est)))+
   geom_line(aes(color = hab_sed))+
   facet_wrap(~year)+
-  labs(x = "Predicted lobster biomass", y = "Depth (m)")+
+  labs(y = "Predicted lobster biomass", x = "Depth (ft)")+
   theme_bw()
 ggsave("Figures/timevarying_depth_and_hab_sed.png", width = 12, height = 12)
+
+
 
 p %>% 
   mutate(depth = unscale(depth_scaled, column_means[1], column_sds[1]), 
@@ -326,3 +330,57 @@ p %>%
   geom_line(aes(color = hab_sed))+
   facet_grid(hab_sed~year)
 ggsave("Figures/timevarying_depth_and_hab_sed-grid.png", width = 20, height = 20)
+
+
+
+nd <- expand.grid(
+  hab_sed = unique(mod_data2$hab_sed),
+  year = as.numeric(unique(mod_data2$year)), 
+  depth_scaled = c(quantile(mod_data2$depth_scaled, 0.05), median(mod_data2$depth_scaled),quantile(mod_data2$depth_scaled, 0.95)),
+  BT_seasonal_scaled = mean(mod_data2$BT_seasonal_scaled), 
+  season = "Spring"
+) %>% mutate(depth_scaled2 = depth_scaled^2)
+
+p <- predict(fit6, newdata = nd, se_fit = T, re_form = NA)
+
+p %>% 
+  mutate(depth = unscale(depth_scaled, column_means[1], column_sds[1]), 
+         year = as.factor(year)) %>% 
+  ggplot(aes(hab_sed, exp(est)))+
+  geom_point(aes(color = hab_sed, group = depth), show.legend = F)+
+  labs(y = "Predicted lobster biomass", x = "Habitat sediment classs")+
+  facet_wrap(~year)+ 
+  theme_bw()+
+  theme(axis.text.x = element_text(angle = 45, hjust=1))
+
+p %>% 
+  mutate(depth = unscale(depth_scaled, column_means[1], column_sds[1]), 
+         year = as.numeric(year)) %>%
+  separate(hab_sed, into = c("habitat", "sediment"), sep = "-", remove = F) %>%
+  ggplot(aes(x = year, y =exp(est)))+
+  geom_line(aes(color = hab_sed, linetype = as.factor(depth)))+
+  labs(y = "Predicted lobster biomass", x = "Year")+
+  facet_grid(habitat~sediment)+
+  theme_bw()
+
+ggsave("Figures/timevarying_hab_sed_withdepth.png", width = 12, height = 12)
+
+p %>% 
+  filter(depth_scaled > 0 & depth_scaled < 1) %>%
+  mutate(depth = unscale(depth_scaled, column_means[1], column_sds[1]), 
+         year = as.numeric(year)) %>%
+  separate(hab_sed, into = c("habitat", "sediment"), sep = "-", remove = F) %>%
+  ggplot(aes(year, exp(est),
+             ymin = exp(est - 1.96 * est_se),
+             ymax = exp(est + 1.96 * est_se)))+
+  geom_line(aes(color = hab_sed, linetype = as.factor(depth)))+
+  geom_ribbon(aes(fill = hab_sed, group = as.factor(depth), alpha = 0.25))+
+  labs(y = "Predicted lobster biomass", x = "Year")+
+  facet_grid(habitat~sediment)+
+  theme_bw()
+
+ggsave("Figures/timevarying_hab_sed.png", width = 12, height = 12)
+
+
+
+
